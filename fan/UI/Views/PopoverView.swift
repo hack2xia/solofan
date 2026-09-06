@@ -74,7 +74,7 @@ struct PopoverView: View {
         .onDisappear {
             battery.stopMonitoring()
         }
-        .onChange(of: battery.hasBattery) { _, hasBattery in
+        .onChange(of: battery.hasBattery) { hasBattery in
             if !hasBattery {
                 dashboardStore.removeWidgets(ofKind: .batteryInfo)
             }
@@ -281,7 +281,7 @@ struct PopoverView: View {
                     isEditingDashboard.toggle()
                 }
             }
-            .buttonStyle(.glass)
+            .adaptiveGlassButtonStyle()
             .controlSize(.small)
             .help(isEditingDashboard ? "Finish editing dashboard" : "Customize widgets")
         }

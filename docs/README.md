@@ -4,7 +4,7 @@
 
 **A lightweight, powerful menu bar application for monitoring system temperatures and controlling fan speeds on macOS.**
 
-[![macOS](https://img.shields.io/badge/macOS-26.1+-blue.svg)](https://www.apple.com/macos/)
+[![macOS](https://img.shields.io/badge/macOS-13.0+-blue.svg)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](../LICENSE)
 [![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-purple.svg)](https://developer.apple.com/xcode/swiftui/)
@@ -60,10 +60,10 @@
 ## 📋 Requirements
 
 ### System Requirements
-- **Minimum (current release builds)**: **macOS 26.1+** — this matches `MACOSX_DEPLOYMENT_TARGET` in `fan.xcodeproj`. Binaries will not run on older systems.
+- **Minimum**: **macOS 13.0+ (Ventura)** — this matches `MACOSX_DEPLOYMENT_TARGET` in `fan.xcodeproj`.
 - **Architecture**: Apple Silicon and Intel (CI produces a build suitable for both where applicable)
 
-Some features use APIs gated at runtime (for example ServiceManagement paths that prefer **macOS 13+**); the **deployable OS floor** for the app bundle is still **26.1** per the Xcode setting.
+Newer-OS features are gated at runtime: native **Liquid Glass** styling and `MeshGradient` only render on **macOS 15/26+**, with material-based fallbacks on older systems (for example ServiceManagement paths that prefer **macOS 13+**).
 
 ### Permissions
 - **Temperature Reading**: Works without special privileges on most Macs

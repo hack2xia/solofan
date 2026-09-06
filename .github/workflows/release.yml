@@ -220,7 +220,7 @@ jobs:
           3. Install the helper when prompted
 
           ### Requirements
-          - macOS **26.1** or later
+          - macOS **13.0** or later
           - Apple Silicon or Intel
 
           ### SHA256

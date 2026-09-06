@@ -25,7 +25,7 @@ A lightweight menu bar app for monitoring CPU/GPU temperatures and controlling f
 
 ## Requirements
 
-- **macOS 26.1 or later** — matches the Xcode project deployment target (`MACOSX_DEPLOYMENT_TARGET`) for current builds. Older macOS versions are not supported by this release line.
+- **macOS 13 Ventura or later** — matches the Xcode project deployment target (`MACOSX_DEPLOYMENT_TARGET`). On macOS 26 the UI uses native Liquid Glass; older versions get an equivalent material-based styling.
 - **Apple Silicon or Intel** (universal build when distributed from CI)
 
 ## Important Notes

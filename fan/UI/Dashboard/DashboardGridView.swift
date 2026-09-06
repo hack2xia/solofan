@@ -61,7 +61,7 @@ struct DashboardGridView: View {
                 WidgetGallerySheet(store: store, targetRowID: rowID, hasBattery: battery.hasBattery)
             }
         }
-        .onChange(of: isEditing) { _, editing in
+        .onChange(of: isEditing) { editing in
             if !editing {
                 dragState = nil
                 activeDropSlot = nil

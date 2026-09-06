@@ -120,7 +120,7 @@ private struct LiquidGlassSettingsView: View {
 
             if presentation == .sheet {
                 Button("Done") { dismiss() }
-                    .buttonStyle(.glassProminent)
+                    .adaptiveGlassButtonStyle(prominent: true)
                     .controlSize(.large)
                     .frame(maxWidth: .infinity)
             }
@@ -128,7 +128,7 @@ private struct LiquidGlassSettingsView: View {
         .padding(20)
         .frame(width: sidebarWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
+        .liquidGlass(cornerRadius: 22)
     }
 
     private var sidebarHeader: some View {
@@ -203,7 +203,7 @@ private struct LiquidGlassSettingsView: View {
             }
             .padding(.bottom, 20)
 
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: false) {
                 Form {
                     switch selection {
                     case .general:
@@ -219,7 +219,6 @@ private struct LiquidGlassSettingsView: View {
                 .formStyle(.grouped)
                 .scrollContentBackground(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
     }
 
@@ -238,7 +237,7 @@ private struct LiquidGlassSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .onChange(of: showMenuBarIcon) { _, visible in
+            .onChange(of: showMenuBarIcon) { visible in
                 AppDelegate.shared?.setMenuBarIconVisible(visible)
             }
         } header: {
@@ -254,7 +253,7 @@ private struct LiquidGlassSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .onChange(of: launchAtLogin) { _, enabled in
+            .onChange(of: launchAtLogin) { enabled in
                 UserDefaults.standard.set(enabled, forKey: "launchAtLogin")
                 viewModel.launchAtLogin = enabled
                 LaunchAtLoginManager.shared.isEnabled = enabled
@@ -276,7 +275,7 @@ private struct LiquidGlassSettingsView: View {
                 Text("Display")
             }
             .pickerStyle(.inline)
-            .onChange(of: statusBarDisplayMode) { _, tag in
+            .onChange(of: statusBarDisplayMode) { tag in
                 UserDefaults.standard.set(tag, forKey: "statusBarDisplayMode")
                 viewModel.statusBarDisplayMode = tag
                 NotificationCenter.default.post(
@@ -300,7 +299,7 @@ private struct LiquidGlassSettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Slider(value: $monitoringInterval, in: 0.5...5.0, step: 0.5)
-                .onChange(of: monitoringInterval) { _, value in
+                .onChange(of: monitoringInterval) { value in
                     UserDefaults.standard.set(value, forKey: "monitoringInterval")
                 }
         } header: {
@@ -316,7 +315,7 @@ private struct LiquidGlassSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .onChange(of: autoSwitchMode) { _, enabled in
+            .onChange(of: autoSwitchMode) { enabled in
                 UserDefaults.standard.set(enabled, forKey: "autoSwitchMode")
             }
         } header: {
@@ -335,7 +334,7 @@ private struct LiquidGlassSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .onChange(of: enableNotifications) { _, enabled in
+            .onChange(of: enableNotifications) { enabled in
                 UserDefaults.standard.set(enabled, forKey: "enableNotifications")
             }
         } header: {
@@ -349,7 +348,7 @@ private struct LiquidGlassSettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Slider(value: $highTempAlert, in: 70...95, step: 1)
-                .onChange(of: highTempAlert) { _, value in
+                .onChange(of: highTempAlert) { value in
                     UserDefaults.standard.set(value, forKey: "highTempAlert")
                 }
         } header: {

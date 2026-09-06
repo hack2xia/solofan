@@ -2,6 +2,13 @@
 
 All notable changes to SoloFan will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **Minimum macOS lowered from 26.1 to 13.0 (Ventura)**: `MACOSX_DEPLOYMENT_TARGET` is now `13.0`.
+- Native **Liquid Glass** styling and `MeshGradient` are gated to macOS 26 / 15+ at runtime; macOS 13–15 use equivalent material-based fallbacks (`.ultraThinMaterial` surfaces, bordered buttons, animated gradient backdrop).
+- Two-parameter `.onChange` closures replaced with the single-parameter form available since macOS 12.
+
 ## [1.6.6] - 2026-07-16
 
 ### Fixed

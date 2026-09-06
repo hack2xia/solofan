@@ -61,10 +61,10 @@ struct FanSpeedView: View {
         }
         .padding(14)
         .liquidGlass()
-        .onChange(of: viewModel.manualSpeeds) { _, newVal in
+        .onChange(of: viewModel.manualSpeeds) { newVal in
             syncLocalSpeedsFromModel(newVal)
         }
-        .onChange(of: viewModel.numberOfFans) { _, _ in
+        .onChange(of: viewModel.numberOfFans) { _ in
             syncLocalSpeedsFromModel(viewModel.manualSpeeds)
         }
     }
@@ -125,7 +125,7 @@ struct FanSpeedView: View {
                 step: 100
             )
             .accentColor(.blue)
-            .onChange(of: localSpeed) { _, newValue in
+            .onChange(of: localSpeed) { newValue in
                 unifiedDebounceTask?.cancel()
                 unifiedDebounceTask = Task {
                     try? await Task.sleep(nanoseconds: 250_000_000)
@@ -138,7 +138,7 @@ struct FanSpeedView: View {
                     }
                 }
             }
-            .onChange(of: viewModel.manualSpeed) { _, newValue in
+            .onChange(of: viewModel.manualSpeed) { newValue in
                 let clamped = Double(
                     max(viewModel.effectiveUnifiedMinRPM, min(viewModel.effectiveUnifiedMaxRPM, newValue))
                 )
