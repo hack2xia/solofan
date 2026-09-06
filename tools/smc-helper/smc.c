@@ -249,6 +249,7 @@ static int validFan(int fanNum, io_connect_t conn)
     if (n <= 0)
         return fanNum < 8; // SMC count unreadable: allow only a small sane range
     return fanNum < n && fanNum < 10;
+}
 
 float getFanSpeed(int fanNum, io_connect_t conn)
 {
