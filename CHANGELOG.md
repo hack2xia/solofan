@@ -4,6 +4,9 @@ All notable changes to SoloFan will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Auto-mode Threshold now actually controls the fan**: `autoThreshold` was persisted and shown in the UI but never used by the control loop. The curve now sits at the floor speed at or below the Threshold and ramps linearly toward Max Speed at 90 °C.
+
 ### Changed
 - **Minimum macOS lowered from 26.1 to 13.0 (Ventura)**: `MACOSX_DEPLOYMENT_TARGET` is now `13.0`.
 - Native **Liquid Glass** styling and `MeshGradient` are gated to macOS 26 / 15+ at runtime; macOS 13–15 use equivalent material-based fallbacks (`.ultraThinMaterial` surfaces, bordered buttons, animated gradient backdrop).

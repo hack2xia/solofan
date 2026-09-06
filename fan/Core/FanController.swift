@@ -450,9 +450,18 @@ class FanController: ObservableObject {
         let response = autoAggressiveness
         let midPoint = 1.5
 
-        let tempFloor = 30.0
-        let tempCeiling = 90.0
-        let tempRatio = max(0.0, min(1.0, (currentTemp - tempFloor) / (tempCeiling - tempFloor)))
+        // Threshold is the fan engagement point: at or below it the curve sits at
+        // the floor; above it the curve ramps linearly toward max at 90°C.
+        let rampStart = autoThreshold
+        let rampEnd = 90.0
+        let tempRatio: Double
+        if currentTemp <= rampStart {
+            tempRatio = 0
+        } else if rampEnd <= rampStart {
+            tempRatio = 1
+        } else {
+            tempRatio = min(1.0, (currentTemp - rampStart) / (rampEnd - rampStart))
+        }
         let autoCeiling = min(autoMaxSpeed, unifiedMaxClamp)
         let autoFloor = unifiedMinClamp
         let tempBasedSpeed = Double(autoFloor) + Double(max(0, autoCeiling - autoFloor)) * tempRatio
