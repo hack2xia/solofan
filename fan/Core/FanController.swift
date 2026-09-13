@@ -485,8 +485,13 @@ class FanController: ObservableObject {
         for i in 0..<monitor.numberOfFans {
             let mx = maxRPM(for: i)
             let mn = minRPM(for: i)
-            let cap = min(mx, autoCeiling)
-            targets.append(max(mn, min(unifiedTarget, cap)))
+            if currentTemp >= FanRPMBounds.emergencyTemperature {
+                // Thermal emergency: noise preferences stop mattering, so bypass
+                // autoMaxSpeed and the unified target entirely.
+                targets.append(mx)
+            } else {
+                targets.append(max(mn, min(unifiedTarget, min(mx, autoCeiling))))
+            }
         }
 
         let representative = targets.max() ?? unifiedTarget
@@ -495,11 +500,17 @@ class FanController: ObservableObject {
             applyFanTargets(targets)
             lastAppliedSpeed = representative
 
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                let parts = targets.enumerated().map { "F\($0.offset): \($0.element)" }.joined(separator: ", ")
+        let emergency = currentTemp >= FanRPMBounds.emergencyTemperature
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            let parts = targets.enumerated().map { "F\($0.offset): \($0.element)" }.joined(separator: ", ")
+            if emergency {
+                self.statusMessage = "Emergency — \(parts) (≥\(Int(FanRPMBounds.emergencyTemperature))°C)"
+            } else {
                 self.statusMessage = "Auto — \(parts) (response \(String(format: "%.1f", self.autoAggressiveness)))"
             }
+        }
         }
     }
 

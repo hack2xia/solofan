@@ -22,4 +22,8 @@ enum FanRPMBounds {
 
     /// Demo / placeholder data when SMC is unavailable.
     static let demoMaxRPM = 4800
+
+    /// At or above this temperature, auto mode ignores `autoMaxSpeed` and drives
+    /// every fan to its hardware max.
+    static let emergencyTemperature: Double = 88
 }
