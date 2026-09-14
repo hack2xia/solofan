@@ -19,6 +19,13 @@ class StatusBarManager: ObservableObject {
     /// panels, the spinning-fan animation — exists only while the popover is open.
     var popoverContentProvider: (() -> NSViewController)?
     private var popoverCloseObserver: PopoverCloseObserver?
+    /// Built dashboard controller, reused across opens. While the popover is
+    /// closed this tree is detached from any window: SwiftUI still processes
+    /// monitoring ticks, but with no window there is no CA render pass and no
+    /// animation ticking. (The 15–22% background CPU that motivated lazy
+    /// building in 7815570 came from the tree staying attached to the hidden
+    /// popover window, not from retention per se.)
+    private var cachedDashboardController: NSViewController?
     /// Built once and reused. The menu-bar glyph is intentionally static: a
     /// per-frame redraw of the status item forces AppKit (and any menu-bar
     /// manager observing it) to recomposite continuously, pegging a core even
@@ -74,9 +81,8 @@ class StatusBarManager: ObservableObject {
             let popover = NSPopover()
             popover.behavior = .transient
             popover.contentSize = NSSize(width: 340, height: 600)
-            // Release the SwiftUI hierarchy (and its Metal pipeline / animations)
-            // the moment the popover closes — NSPopover otherwise retains its
-            // contentViewController and keeps rendering it in the background.
+            // Discard the shell on close; the cached dashboard controller
+            // survives detached from any window (see cachedDashboardController).
             let observer = PopoverCloseObserver { [weak self] in
                 self?.popover?.contentViewController = nil
             }
@@ -395,18 +401,55 @@ class StatusBarManager: ObservableObject {
             return
         }
 
-        // Content is intentionally nil until open (and cleared on close) so the
-        // SwiftUI hierarchy does not keep rendering in the background.
+        // Show a lightweight shell immediately; the dashboard is embedded on
+        // the next runloop turn so the click never waits on the gauges' first
+        // layout/render.
         if popover.contentViewController == nil {
-            guard let popoverContentProvider else {
-                print("StatusBar: Popover content provider is nil")
-                return
-            }
-            popover.contentViewController = popoverContentProvider()
+            popover.contentViewController = makeShellViewController()
         }
 
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        attachDashboardWhenShown()
+    }
+
+    private func makeShellViewController() -> NSViewController {
+        let shell = NSViewController()
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 600))
+        view.autoresizingMask = [.width, .height]
+        shell.view = view
+        return shell
+    }
+
+    private func attachDashboardWhenShown() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let popover = self.popover, popover.isShown,
+                  let shell = popover.contentViewController, shell.children.isEmpty
+            else { return }
+
+            let controller: NSViewController
+            if let cached = self.cachedDashboardController {
+                controller = cached
+            } else {
+                guard let provider = self.popoverContentProvider else { return }
+                controller = provider()
+                self.cachedDashboardController = controller
+            }
+
+            controller.removeFromParent()
+            controller.view.removeFromSuperview()
+            shell.addChild(controller)
+            controller.view.frame = shell.view.bounds
+            controller.view.autoresizingMask = [.width, .height]
+            shell.view.addSubview(controller.view)
+
+            // Match the old behavior where the hosting view's fitting size
+            // drove the popover height.
+            let fitting = controller.view.fittingSize
+            if fitting.height >= 480 {
+                shell.preferredContentSize = NSSize(width: 340, height: min(640, max(480, fitting.height)))
+            }
+        }
     }
     
     func closePopover() {
