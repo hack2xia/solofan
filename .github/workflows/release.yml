@@ -77,6 +77,28 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
+      # The helper is not part of the Xcode build graph (it lives in
+      # Resources as a prebuilt binary), so rebuild it from source here —
+      # otherwise editing smc.c would never reach a release. Assert the
+      # universal slice set and the minOS floor the README promises.
+      - name: Build smc-helper
+        run: |
+          set -euo pipefail
+          cd tools/smc-helper
+          make clean && make
+          lipo -info smc-helper | grep -q arm64
+          lipo -info smc-helper | grep -q x86_64
+          for arch in arm64 x86_64; do
+            minos=$(xcrun vtool -arch "$arch" -show-build smc-helper | awk '/minos/ {print $2}')
+            if [ -z "$minos" ]; then
+              echo "Error: no minos found for $arch slice"; exit 1
+            fi
+            if [ "$(printf '%s\n' 13.0 "$minos" | sort -V | head -1)" != "13.0" ]; then
+              echo "Error: $arch slice minos is $minos, must be <= 13.0"; exit 1
+            fi
+          done
+          cp -f smc-helper ../../fan/Resources/smc-helper
+
       - name: Build SoloFan
         run: |
           xcodebuild \
