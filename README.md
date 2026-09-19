@@ -135,14 +135,16 @@ see [`LICENSE`](LICENSE).
 It ships one component under different terms:
 
 - **`smc-helper`** is built from `tools/smc-helper/smc.{c,h}`, which derives from
-  smcFanControl by devnull & Hendrik Holtmann and is **GPL**-licensed, as stated
-  in its file headers. It is compiled into a standalone executable that the app
+  smcFanControl by devnull & Hendrik Holtmann and is **GPL-2.0**-licensed, as
+  stated in its file headers. It is compiled into a standalone executable that the app
   runs as a subprocess (`sudo -n /usr/local/bin/smc-helper …`); it is not linked
   into the Swift binary, and its sources live entirely in `tools/smc-helper/`.
 
-Built apps and DMGs therefore contain a GPL component, so redistributing them
+Built apps and DMGs therefore contain a GPL-2.0 component, so redistributing them
 carries that component's obligations (source availability and license text among
-them). See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the details.
+them) — the license text is bundled at `SoloFan.app/Contents/Resources/GPL-2.0.txt`
+and vendored at [`LICENSES/GPL-2.0.txt`](LICENSES/GPL-2.0.txt). See
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the details.
 The MIT license covers the rest and does permit commercial distribution.
 
 ## Troubleshooting

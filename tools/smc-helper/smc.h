@@ -1,7 +1,7 @@
 /*
  * Apple System Management Control (SMC) Tool
  * Based on smcFanControl by devnull & Hendrik Holtmann
- * GPL License
+ * GPL License — version 2, as per the smcFanControl upstream project
  */
 
 #ifndef __SMC_H__
