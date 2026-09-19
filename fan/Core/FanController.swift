@@ -522,52 +522,32 @@ class FanController: ObservableObject {
 
         guard currentTemp > 0, monitor.numberOfFans > 0 else { return }
 
-        let response = autoAggressiveness
-        let midPoint = 1.5
-
-        // Threshold is the fan engagement point: at or below it the curve sits at
-        // the floor; above it the curve ramps linearly toward max at 90°C.
-        let rampStart = autoThreshold
-        let rampEnd = 90.0
-        let tempRatio: Double
-        if currentTemp <= rampStart {
-            tempRatio = 0
-        } else if rampEnd <= rampStart {
-            tempRatio = 1
-        } else {
-            tempRatio = min(1.0, (currentTemp - rampStart) / (rampEnd - rampStart))
-        }
-        let autoCeiling = min(autoMaxSpeed, unifiedMaxClamp)
-        let autoFloor = unifiedMinClamp
-        let tempBasedSpeed = Double(autoFloor) + Double(max(0, autoCeiling - autoFloor)) * tempRatio
-
-        let targetSpeed: Double
-        if response <= midPoint {
-            let blend = response / midPoint
-            targetSpeed = Double(autoFloor) * (1.0 - blend) + tempBasedSpeed * blend
-        } else {
-            let blend = (response - midPoint) / (3.0 - midPoint)
-            targetSpeed = tempBasedSpeed * (1.0 - blend) + Double(autoCeiling) * blend
-        }
-
         if !isControlEnabled {
             enableManualMode()
         }
 
-        let unifiedTarget = Int(max(Double(autoFloor), min(targetSpeed, Double(autoCeiling))))
+        let autoCeiling = min(autoMaxSpeed, unifiedMaxClamp)
+        let autoFloor = unifiedMinClamp
 
-        var targets: [Int] = []
-        for i in 0..<monitor.numberOfFans {
-            let mx = maxRPM(for: i)
-            let mn = minRPM(for: i)
-            if currentTemp >= FanRPMBounds.emergencyTemperature {
-                // Thermal emergency: noise preferences stop mattering, so bypass
-                // autoMaxSpeed and the unified target entirely.
-                targets.append(mx)
-            } else {
-                targets.append(max(mn, min(unifiedTarget, min(mx, autoCeiling))))
-            }
-        }
+        // Curve math lives in FanCurve (pure, unit-tested); this function only
+        // wires telemetry in and gates the apply.
+        let unifiedTarget = FanCurve.unifiedTarget(
+            temperature: currentTemp,
+            threshold: autoThreshold,
+            aggressiveness: autoAggressiveness,
+            floorRPM: autoFloor,
+            ceilingRPM: autoCeiling
+        )
+
+        let mins = (0..<monitor.numberOfFans).map { minRPM(for: $0) }
+        let maxs = (0..<monitor.numberOfFans).map { maxRPM(for: $0) }
+        let targets = FanCurve.targets(
+            unified: unifiedTarget,
+            temperature: currentTemp,
+            fanMins: mins,
+            fanMaxs: maxs,
+            ceilingRPM: autoCeiling
+        )
 
         let representative = targets.max() ?? unifiedTarget
 
@@ -615,9 +595,15 @@ class FanController: ObservableObject {
             autoMaxSpeed = savedMaxSpeed
         }
 
-        let savedAggressiveness = defaults.double(forKey: "autoAggressiveness")
-        if savedAggressiveness >= 0.0 && savedAggressiveness <= 3.0 {
-            autoAggressiveness = savedAggressiveness
+        // `double(forKey:)` returns 0.0 for a missing key, and 0.0 passes the
+        // range check below — which silently overwrote the declared default of
+        // 1.5 on a fresh install ("always min speed"). Check for existence
+        // first; an explicit 0.0 from the user remains a legal value.
+        if defaults.object(forKey: "autoAggressiveness") != nil {
+            let savedAggressiveness = defaults.double(forKey: "autoAggressiveness")
+            if savedAggressiveness >= 0.0 && savedAggressiveness <= 3.0 {
+                autoAggressiveness = savedAggressiveness
+            }
         }
     }
 

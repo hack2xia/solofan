@@ -121,4 +121,30 @@ final class FanControlTests: XCTestCase {
         viewModel.gpuTemperature = 65.0
         XCTAssertEqual(viewModel.getMaxTemperature(), 70.0)
     }
+    
+    // MARK: - autoAggressiveness persistence (regression: missing key → 0)
+    
+    func testMissingAggressivenessKeyKeepsDeclaredDefault() {
+        // Fresh suite: the key does not exist. `double(forKey:)` would return
+        // 0.0 ("always min speed") and pass the old range check, silently
+        // overriding the declared default of 1.5.
+        XCTAssertNil(defaults.object(forKey: "autoAggressiveness"))
+        let controller = makeController()
+        XCTAssertEqual(controller.autoAggressiveness, 1.5)
+    }
+    
+    func testExplicitZeroAggressivenessIsPreserved() {
+        // 0.0 is a legal user choice ("always min"), not a missing value.
+        defaults.set(0.0, forKey: "autoAggressiveness")
+        let controller = makeController()
+        XCTAssertEqual(controller.autoAggressiveness, 0.0)
+    }
+    
+    func testOutOfBoundsAggressivenessKeepsDeclaredDefault() {
+        defaults.set(3.5, forKey: "autoAggressiveness")
+        XCTAssertEqual(makeController().autoAggressiveness, 1.5)
+        
+        defaults.set(-1.0, forKey: "autoAggressiveness")
+        XCTAssertEqual(makeController().autoAggressiveness, 1.5)
+    }
 }
