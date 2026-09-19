@@ -1,6 +1,6 @@
 //
 //  BatteryMonitor.swift
-//  ffan
+//  SoloFan
 //
 //  Created by mohamad on 12/1/2026.
 //  Battery and power information using IOKit

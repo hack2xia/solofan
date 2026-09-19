@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  ffan
+//  SoloFan
 //
 //  Created by mohamad on 11/1/2026.
 //

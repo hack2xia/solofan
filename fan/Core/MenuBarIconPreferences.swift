@@ -1,6 +1,6 @@
 //
 //  MenuBarIconPreferences.swift
-//  ffan
+//  SoloFan
 //
 //  Persists whether the menu bar status item is hidden.
 //

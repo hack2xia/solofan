@@ -1,6 +1,6 @@
 //
 //  SettingsWindowController.swift
-//  ffan
+//  SoloFan
 //
 //  Opens the settings window from AppKit (menu bar context menu, app reopen, etc.).
 //

@@ -1,6 +1,6 @@
 //
 //  FanRPMBounds.swift
-//  ffan
+//  SoloFan
 //
 //  Central RPM limits for SMC reads, UI sliders, and writes.
 //

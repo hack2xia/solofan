@@ -1,6 +1,6 @@
 //
 //  StatusBarManager.swift
-//  ffan
+//  SoloFan
 //
 //  Created by mohamad on 11/1/2026.
 //  Static status bar icon with dynamic display text (temp / power / fan load)

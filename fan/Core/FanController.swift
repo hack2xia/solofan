@@ -1,6 +1,6 @@
 //
 //  FanController.swift
-//  ffan
+//  SoloFan
 //
 //  Created by mohamad on 11/1/2026.
 //  SMC fan control with per-fan targets and hardware-derived RPM limits.

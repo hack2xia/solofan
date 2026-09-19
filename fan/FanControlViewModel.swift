@@ -1,6 +1,6 @@
 //
 //  FanControlViewModel.swift
-//  ffan
+//  SoloFan
 //
 //  Created by mohamad on 11/1/2026.
 //  Fixed bindings and added proper state management
@@ -10,6 +10,7 @@ import Foundation
 import Combine
 import SwiftUI
 import AppKit
+import UserNotifications
 
 @MainActor
 class FanControlViewModel: ObservableObject {
@@ -106,12 +107,24 @@ class FanControlViewModel: ObservableObject {
     }
     
     private func showHighTempNotification(_ temperature: Double) {
-        let notification = NSUserNotification()
-        notification.title = "High Temperature Alert"
-        notification.subtitle = String(format: "CPU temperature: %.1f°C", temperature)
-        notification.informativeText = "Consider switching to automatic fan control or check your system."
-        notification.soundName = NSUserNotificationDefaultSoundName
-        NSUserNotificationCenter.default.deliver(notification)
+        // UNUserNotificationCenter replaced NSUserNotification (deprecated since
+        // macOS 11). Authorization is requested once at launch by the AppDelegate.
+        let content = UNMutableNotificationContent()
+        content.title = "High Temperature Alert"
+        content.subtitle = String(format: "CPU temperature: %.1f°C", temperature)
+        content.body = "Consider switching to automatic fan control or check your system."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                print("Fan Control: failed to post temperature alert: \(error.localizedDescription)")
+            }
+        }
     }
     
     private func setupBindings() {
@@ -262,8 +275,13 @@ class FanControlViewModel: ObservableObject {
     }
     
     @objc private func systemWillSleep() {
+        // Bounded and synchronous. `willSleep` is delivered on the main thread and
+        // this notification returning is what lets the machine suspend, so a
+        // fire-and-forget restore could lose the race to sleep and leave the fans
+        // pinned in manual mode. The AppleScript fallback is disabled inside, so
+        // this can never block suspension on an admin password prompt.
         print("FanControl: System going to sleep/lock - restoring system control")
-        fanController.restoreAutomaticControl()
+        fanController.restoreAutomaticControlSync(timeout: 1.0)
     }
     
     @objc private func systemDidWake() {

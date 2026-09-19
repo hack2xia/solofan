@@ -1,6 +1,6 @@
 //
 //  FanSpeedView.swift
-//  ffan
+//  SoloFan
 //
 //  Fan speed display with unified or per-fan manual sliders (bounds from SMC).
 //

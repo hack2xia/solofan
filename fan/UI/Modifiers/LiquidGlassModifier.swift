@@ -1,6 +1,6 @@
 //
 //  LiquidGlassModifier.swift
-//  ffan
+//  SoloFan
 //
 //  Native Liquid Glass (macOS 26+) with material fallback styling for
 //  macOS 13–15. The glass path is additionally gated behind

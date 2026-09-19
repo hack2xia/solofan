@@ -1,6 +1,6 @@
 //
 //  PopoverView.swift
-//  ffan
+//  SoloFan
 //
 //  Clean, organized UI with customizable widget dashboard.
 //

@@ -8,6 +8,7 @@
 
 import SwiftUI
 import AppKit
+import UserNotifications
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -83,6 +84,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         statusBarManager.setupStatusBar()
+
+        // High-temperature alerts go through UNUserNotificationCenter, which needs
+        // authorization. Ask once here rather than at post time so the first alert
+        // isn't swallowed. Never reached under XCTest — the launch guard above
+        // returns before `setupApplication` runs.
+        if viewModel.enableNotifications {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
+                if let error {
+                    print("SoloFan: notification authorization failed: \(error.localizedDescription)")
+                }
+            }
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.attachPopoverContent()
@@ -217,6 +230,11 @@ struct SoloFanApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
+        // SwiftUI requires `App.body` to return a Scene, but this app's only window
+        // is the AppKit-owned `SettingsWindowController`. An empty `Settings` scene
+        // is the least intrusive way to satisfy that; Cmd+, is intercepted by the
+        // local monitor in `installSettingsKeyboardShortcut` and routed to the real
+        // window. See SettingsWindowController.swift.
         Settings {
             Text("SoloFan")
                 .frame(width: 0, height: 0)

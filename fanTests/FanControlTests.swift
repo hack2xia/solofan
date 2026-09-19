@@ -1,6 +1,6 @@
 //
 //  FanControlTests.swift
-//  ffanTests
+//  fanTests
 //
 //  Created by mohamad on 11/1/2026.
 //

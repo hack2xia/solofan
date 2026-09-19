@@ -1,6 +1,6 @@
 //
 //  SystemMonitor.swift
-//  ffan
+//  SoloFan
 //
 //  Created by mohamad on 11/1/2026.
 //  Rewritten for proper SMC access on both Intel and Apple Silicon Macs
