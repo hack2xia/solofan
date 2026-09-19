@@ -274,7 +274,7 @@ jobs:
 
           ### Highlights
           $SIGNING_LINE
-          - **Security** — the root helper now clamps targets to the fan's own hardware minimum, so no process can stall a fan through the passwordless sudo rule; helper input parsing is strict, and install-time sudoers changes are validated with `visudo` and rolled back on failure
+          - **Security** — the root helper now clamps targets to the fan's own hardware minimum, so no process can stall a fan through the passwordless sudo rule; helper input parsing is strict, and install-time sudoers changes are validated with 'visudo -cf' and rolled back on failure
           - **Reliability on quit/sleep** — handing fans back to the system is now the final, ordered SMC operation (a pending slider write can no longer re-pin manual mode after the restore); the quit path can no longer deadlock, and no admin prompt can appear while quitting or sleeping
           - **Auto mode** — the fresh-install default response is the documented neutral curve (was silently "always min speed"); a failed high-temperature/emergency write now retries instead of being suppressed by the 50 RPM hysteresis
           - **Compatibility** — the helper is rebuilt by CI from the same commit as the app (universal, minOS 13), so the macOS 13+ requirement is actually met; requires macOS **13.0 or later**
