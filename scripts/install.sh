@@ -36,7 +36,8 @@ mv "${APP_NAME}.app" /Applications/
 # root-owned, mode 755, plus a sudoers drop-in so `sudo -n smc-helper ...` runs
 # without a password. Deliberately NOT setuid: the app always shells out through
 # `sudo -n`, so setuid buys nothing, and without the drop-in every fan write
-# would fall back to an AppleScript password prompt.
+# would fall back to an AppleScript password prompt. The canonical values live
+# in fan/Core/HelperInstallPaths.swift; mirror any change there here.
 HELPER="/usr/local/bin/smc-helper"
 SUDOERS="/etc/sudoers.d/smc-fan-helper"
 

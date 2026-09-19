@@ -54,7 +54,7 @@ class FanController: ObservableObject {
     private let applyQueue = DispatchQueue(label: "com.solofan.fan-apply", qos: .userInitiated)
 
     private var smcHelperPath: String {
-        "/usr/local/bin/smc-helper"
+        HelperInstallPaths.helper
     }
 
     // MARK: - Write coordination state (main-thread only)

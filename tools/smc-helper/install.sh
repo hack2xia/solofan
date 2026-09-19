@@ -2,7 +2,8 @@
 # SMC Helper Installation Script
 # Installs smc-helper root-owned with a sudoers drop-in, so `sudo -n smc-helper`
 # works without a password afterwards. This mirrors what the app does in
-# PermissionsManager — keep the two in sync.
+# PermissionsManager — keep the two in sync. The canonical values live in
+# fan/Core/HelperInstallPaths.swift; mirror any change there here.
 
 set -e
 
