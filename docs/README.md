@@ -185,17 +185,14 @@ fan/
 ├── ViewModels/
 │   └── FanControlViewModel.swift  # Main app state & business logic
 └── Resources/
-    ├── smc-helper             # Setuid helper for SMC writes
-    └── smc-write.swift        # Alternative Swift implementation
+    └── smc-helper             # Privileged fan-control helper (root-owned, sudoers-scoped)
 
 tools/
-├── smc-helper/
-│   ├── smc.c                  # Low-level SMC C implementation
-│   ├── smc.h                  # SMC definitions and structures
-│   ├── Makefile               # Build configuration
-│   └── install.sh             # Installation script
-└── smc-write/
-    └── Sources/               # Swift-based SMC writer
+└── smc-helper/
+    ├── smc.c                  # Low-level SMC C implementation
+    ├── smc.h                  # SMC definitions and structures
+    ├── Makefile               # Build configuration
+    └── install.sh             # Installation script
 ```
 
 ### Key Components

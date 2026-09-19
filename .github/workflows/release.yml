@@ -92,7 +92,7 @@ jobs:
           chmod +x release/SoloFan.app/Contents/MacOS/*
 
           # Nested helpers must be signed before the app bundle (inside-out).
-          for bin in release/SoloFan.app/Contents/Resources/smc-helper release/SoloFan.app/Contents/Resources/smc-write; do
+          for bin in release/SoloFan.app/Contents/Resources/smc-helper; do
             if [ -f "$bin" ]; then
               codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$bin"
             fi
@@ -203,7 +203,7 @@ jobs:
           ## SoloFan v${{ steps.version.outputs.version }}
 
           ### Highlights
-          - **Developer ID signed + notarized** — App, nested \`smc-helper\` / \`smc-write\`, and DMG; notarized and stapled for Gatekeeper
+          - **Developer ID signed + notarized** — App, nested \`smc-helper\`, and DMG; notarized and stapled for Gatekeeper
           - **Menu bar popover fix** — Left-click opens the dashboard again (lazy content on open)
           - Includes Apple Silicon fan control and die-temp fixes from v1.6.4+
 
