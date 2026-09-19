@@ -15,6 +15,16 @@ enum ControlMode: String, CaseIterable {
     case automatic
 }
 
+/// Terminal state of one queued apply. `.superseded` means a newer operation
+/// (restore, generation bump) took over mid-flight — it updates neither the
+/// status message nor `lastAppliedSpeed`, but MUST still clear in-flight
+/// backpressure flags.
+enum ApplyOutcome {
+    case success
+    case failure
+    case superseded
+}
+
 class FanController: ObservableObject {
     @Published var mode: ControlMode = .manual
     /// Unified manual target (single slider / legacy settings).
@@ -46,6 +56,34 @@ class FanController: ObservableObject {
     private var smcHelperPath: String {
         "/usr/local/bin/smc-helper"
     }
+
+    // MARK: - Write coordination state (main-thread only)
+    //
+    // None of these need a lock. `writeGeneration` is read from `applyQueue`
+    // blocks, which is safe for a specific reason worth writing down so nobody
+    // "fixes" it later:
+    //
+    // A restore first bumps the generation on the main thread, THEN enqueues
+    // the restore block on the serial `applyQueue`. By FIFO, any queued block
+    // that could still read a stale generation necessarily starts (and
+    // finishes) BEFORE the restore block runs — so the restore remains the
+    // final SMC operation either way. A stale read costs at most one redundant
+    // write that the restore immediately overwrites; it can never violate
+    // ordering. The generation check is therefore a drain accelerator (stale
+    // blocks skip in microseconds instead of taking ~10s each), not the
+    // correctness anchor — the serial queue's FIFO order is.
+    private var writeGeneration = 0
+    /// Set on the quit/sleep paths. A queued AppleScript fallback checks this
+    /// on the main thread before prompting, so an admin password dialog can
+    /// never pop while the main thread is blocked waiting for the restore (or
+    /// the machine is suspending). Cleared only by `reapplySettings` on wake.
+    private var suppressAdminFallback = false
+    /// One pending admin-prompt at a time (checks/prompt all run on main).
+    private var appleScriptFallbackInFlight = false
+    /// Auto-mode backpressure: a failed apply can take ~10s (unlock retry
+    /// loop); without this, a stable target that keeps failing would enqueue
+    /// a new attempt every 2s tick and pile up on the serial queue.
+    private var autoApplyInFlight = false
 
     init(systemMonitor: SystemMonitor, defaults: UserDefaults = .standard) {
         self.systemMonitor = systemMonitor
@@ -183,6 +221,9 @@ class FanController: ObservableObject {
     }
 
     func reapplySettings() {
+        // Wake path: the quit/sleep restore that set this flag has had its
+        // chance; admin prompts are allowed again.
+        suppressAdminFallback = false
         print("FanController: Reapplying settings after wake - mode: \(mode)")
         guard let monitor = systemMonitor, monitor.numberOfFans > 0 else {
             print("FanController: No fans detected yet, retrying in 2 seconds...")
@@ -287,6 +328,12 @@ class FanController: ObservableObject {
         let n = monitor.numberOfFans
         guard n > 0 else { return }
 
+        // Queued manual writes are about to be superseded by this restore;
+        // bump the generation so they abandon themselves instead of running
+        // pointlessly ahead of it. The restore block enqueued below is ordered
+        // after everything already queued (serial FIFO), so it stays final.
+        writeGeneration += 1
+
         applyQueue.async { [weak self] in
             guard let self = self else { return }
             var allSuccess = true
@@ -312,37 +359,62 @@ class FanController: ObservableObject {
     /// `timeout`) until every fan is back under system control, so `terminate`
     /// cannot race the restore the way fire-and-forget + a 0.5s wait did.
     ///
+    /// Ordering guarantees, in order of importance:
+    /// 1. Serial-queue FIFO: the restore block is enqueued on `applyQueue`
+    ///    after everything already queued, so it always runs LAST — a queued
+    ///    slider write can no longer land after the restore and re-pin the
+    ///    fan in manual mode (the bug this function exists to prevent).
+    /// 2. Generation bump first: queued-but-unstarted writes abandon
+    ///    themselves, so the drain before the restore is microseconds instead
+    ///    of up to ~10s per in-flight helper call.
+    /// 3. Bounded wait: the semaphore caps main-thread blocking; on timeout
+    ///    the barrier stays queued (quit: dies with the process, and launch
+    ///    `releaseFansToSystem` clears the rest; sleep: completes after wake).
+    ///
     /// The AppleScript fallback is disabled — prompting for a password on the way
     /// out is useless, and anything left behind is cleared by
     /// `releaseFansToSystem()` on the next launch.
     @discardableResult
     func restoreAutomaticControlSync(timeout: TimeInterval = 2.0) -> Bool {
+        dispatchPrecondition(condition: .onQueue(.main))
         stopAutoControl()
 
         guard let monitor = systemMonitor, monitor.numberOfFans > 0 else { return false }
         let n = monitor.numberOfFans
-        let deadline = Date().addingTimeInterval(timeout)
+
+        suppressAdminFallback = true
+        writeGeneration += 1
 
         var allSuccess = true
-        for i in 0..<n {
-            if Date() >= deadline {
-                print("Fan Control: restore timed out after \(timeout)s")
-                allSuccess = false
-                break
+        let semaphore = DispatchSemaphore(value: 0)
+        applyQueue.async { [weak self] in
+            guard let self = self else {
+                semaphore.signal()
+                return
             }
-            if !runSmcHelper(args: ["auto", "\(i)"], allowAppleScriptFallback: false) {
-                allSuccess = false
+            for i in 0..<n {
+                if !self.runSmcHelper(args: ["auto", "\(i)"], allowAppleScriptFallback: false) {
+                    allSuccess = false
+                }
             }
+            semaphore.signal()
         }
 
-        if allSuccess {
+        // signal() → wait() returning gives the happens-before edge, so
+        // reading `allSuccess` here is safe. The main run loop does NOT spin
+        // while we wait — which is exactly what we want: no timer fire, no
+        // queued main-thread work (including admin prompts) can run.
+        let waitResult = semaphore.wait(timeout: .now() + timeout)
+        let success = (waitResult == .success && allSuccess)
+
+        if success {
             isControlEnabled = false
             statusMessage = "Automatic mode restored"
             print("Fan Control: Automatic mode restored (synchronous)")
         } else {
-            print("Fan Control: Failed to restore auto mode on quit")
+            print("Fan Control: restore incomplete after \(timeout)s (waitResult=\(waitResult == .success ? "success" : "timedOut"))")
         }
-        return allSuccess
+        return success
     }
 
     /// Hands every fan back to the system (`F{n}Md=0`, and `Ftst=0` via
@@ -385,15 +457,22 @@ class FanController: ObservableObject {
         applyFanTargets(targets)
     }
 
-    private func applyFanTargets(_ targets: [Int]) {
+    /// Enqueues one fan-target write batch. Must be called on the main thread.
+    /// `completion` (if given) fires exactly once, on the main thread, with
+    /// the terminal outcome — including `.failure` from the early guards —
+    /// so callers holding backpressure flags never leak them.
+    private func applyFanTargets(_ targets: [Int], completion: ((ApplyOutcome) -> Void)? = nil) {
+        dispatchPrecondition(condition: .onQueue(.main))
         guard let monitor = systemMonitor else {
             statusMessage = "No system monitor"
             lastWriteSuccess = false
+            completion?(.failure)
             return
         }
         guard monitor.numberOfFans > 0, targets.count == monitor.numberOfFans else {
             statusMessage = "Fan target mismatch"
             lastWriteSuccess = false
+            completion?(.failure)
             return
         }
 
@@ -401,25 +480,40 @@ class FanController: ObservableObject {
         // helper itself sleeps while taking manual control. Running that on the
         // main thread freezes the UI mid slider-drag. Serialize applies onto a
         // background queue and only touch @Published state back on main.
+        let generation = writeGeneration
         applyQueue.async { [weak self] in
             guard let self = self else { return }
             var allSuccess = true
+            var superseded = false
             for (i, t) in targets.enumerated() {
+                // Generation re-check per fan: a restore that bumped the
+                // generation while this block was queued (or mid-loop) makes
+                // the remaining writes pointless. See the state declaration
+                // comment for why this needs no lock.
+                if self.writeGeneration != generation {
+                    superseded = true
+                    break
+                }
                 let safe = max(FanRPMBounds.absoluteWriteMinRPM, min(FanRPMBounds.absoluteWriteMaxRPM, t))
                 if !self.runSmcHelper(args: ["set", "\(i)", "\(safe)"]) {
                     allSuccess = false
                 }
             }
-            let parts = targets.enumerated().map { "F\($0.offset): \($0.element)" }.joined(separator: ", ")
+            let outcome: ApplyOutcome = superseded ? .superseded : (allSuccess ? .success : .failure)
             DispatchQueue.main.async {
-                if allSuccess {
+                switch outcome {
+                case .success:
+                    let parts = targets.enumerated().map { "F\($0.offset): \($0.element)" }.joined(separator: ", ")
                     self.statusMessage = "Fan targets RPM — \(parts)"
                     self.lastWriteSuccess = true
                     print("Fan Control: \(parts)")
-                } else {
+                case .failure:
                     self.statusMessage = "Failed to set fan speed"
                     self.lastWriteSuccess = false
+                case .superseded:
+                    break // newer operation owns the published state now
                 }
+                completion?(outcome)
             }
         }
     }
@@ -473,25 +567,50 @@ class FanController: ObservableObject {
             return false
         }
 
-        print("Fan Control: sudo -n unauthorized. Falling back to AppleScript.")
-        let argsString = args.joined(separator: " ")
-        let fullCommand = "'\(helperPath)' \(argsString)"
-        let scriptSource = "do shell script \"\(fullCommand)\" with administrator privileges"
+        print("Fan Control: sudo -n unauthorized. Falling back to AppleScript (async).")
 
-        // NSAppleScript drives Apple Events and must run on the main thread; this
-        // path is normally reached from applyQueue (off-main), so hop to main.
-        let runScript: () -> Bool = {
-            var error: NSDictionary?
-            guard let scriptObject = NSAppleScript(source: scriptSource) else { return false }
-            _ = scriptObject.executeAndReturnError(&error)
-            if error != nil {
-                let errorMsg = error?["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
-                print("Fan Control: AppleScript failed: \(errorMsg)")
-                return false
+        // This call reports failure and returns immediately; the actual prompt
+        // is dispatched asynchronously to the main thread. It MUST NOT
+        // `DispatchQueue.main.sync` back: the quit/sleep restore blocks the
+        // main thread on a semaphore waiting for this queue, so a synchronous
+        // hop would deadlock the restore. The auto loop retries on the next
+        // tick, and the dispatched block updates the published state if the
+        // prompt eventually succeeds.
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            defer { self.appleScriptFallbackInFlight = false }
+            // Re-check on main: suppress during quit/sleep restore, and only
+            // one pending prompt at a time (the 2s auto tick would otherwise
+            // stack password dialogs on every failed sudo -n).
+            if self.suppressAdminFallback || self.appleScriptFallbackInFlight {
+                print("Fan Control: admin prompt suppressed or already pending.")
+                return
             }
-            return true
+            self.appleScriptFallbackInFlight = true
+
+            let argsString = args.joined(separator: " ")
+            let fullCommand = "'\(helperPath)' \(argsString)"
+            let scriptSource = "do shell script \"\(fullCommand)\" with administrator privileges"
+
+            var error: NSDictionary?
+            guard let scriptObject = NSAppleScript(source: scriptSource) else {
+                self.statusMessage = "Failed to set fan speed"
+                self.lastWriteSuccess = false
+                return
+            }
+            _ = scriptObject.executeAndReturnError(&error)
+            if let error = error {
+                let errorMsg = error["NSAppleScriptErrorMessage"] as? String ?? "Unknown error"
+                print("Fan Control: AppleScript failed: \(errorMsg)")
+                self.statusMessage = "Failed to set fan speed"
+                self.lastWriteSuccess = false
+            } else {
+                // The synchronous return already reported failure; keep the
+                // published state truthful about what actually happened.
+                self.lastWriteSuccess = true
+            }
         }
-        return Thread.isMainThread ? runScript() : DispatchQueue.main.sync(execute: runScript)
+        return false
     }
 
     func startAutoControl() {
@@ -550,12 +669,26 @@ class FanController: ObservableObject {
         )
 
         let representative = targets.max() ?? unifiedTarget
-
-        if abs(representative - lastAppliedSpeed) >= 50 || lastAppliedSpeed == 0 {
-            applyFanTargets(targets)
-            lastAppliedSpeed = representative
-
         let emergency = currentTemp >= FanRPMBounds.emergencyTemperature
+
+        // Backpressure: one auto apply in flight at a time (a failing helper
+        // call can take ~10s; the 2s tick would otherwise pile up attempts).
+        // Emergency targets bypass the 50-RPM dedup entirely — a first failed
+        // emergency write must never silence the emergency. lastAppliedSpeed
+        // is updated ONLY on .success, so a failed apply with a stable target
+        // naturally retries on the next tick instead of being deduped away.
+        if !autoApplyInFlight,
+           FanCurve.shouldApply(newRepresentative: representative,
+                                lastApplied: lastAppliedSpeed,
+                                isEmergency: emergency) {
+            autoApplyInFlight = true
+            applyFanTargets(targets) { [weak self] outcome in
+                guard let self = self else { return }
+                self.autoApplyInFlight = false
+                if case .success = outcome {
+                    self.lastAppliedSpeed = representative
+                }
+            }
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
