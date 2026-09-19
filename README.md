@@ -3,11 +3,11 @@
 A lightweight menu bar app for monitoring CPU/GPU temperatures and controlling fan speeds on macOS.
 
 <!-- banner -->
-![SoloFan banner](https://raw.githubusercontent.com/mohamadlounnas/ffan/main/docs/assets/banner.png)
+![SoloFan banner](https://raw.githubusercontent.com/hack2xia/solofan/main/docs/assets/banner.png)
 
 ## Download
 
-[**Download Latest Version (v1.6.6)**](https://github.com/mohamadlounnas/ffan/releases/latest)
+[**Download Latest Version (v1.6.6)**](https://github.com/hack2xia/solofan/releases/latest)
 
 **Quick Start:**
 1. Download the DMG from the link above
@@ -47,7 +47,7 @@ On first launch, the app will prompt you to install a helper tool. This is a **o
 
 **Alternative:** Automated installation via Terminal
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mohamadlounnas/ffan/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hack2xia/solofan/main/scripts/install.sh | bash
 ```
 
 This script downloads the latest version, installs SoloFan, sets up the helper tool, and launches the app automatically.
@@ -60,43 +60,58 @@ If you want to test the UI without installing the helper tool, enable Demo Mode 
 
 ### Files
 
-- **fanApp.swift**: Main app entry point and AppDelegate
-- **SystemMonitor.swift**: SMC communication for temperature and fan speed readings
-- **FanController.swift**: Fan speed control logic (manual and automatic modes)
+- **App/SoloFanApp.swift**: App entry point and AppDelegate (menu bar lifecycle, quit restore)
+- **Core/SystemMonitor.swift**: SMC communication — temperature, fan speed, hardware limits
+- **Core/FanController.swift**: Fan control logic (manual + auto curve) and helper invocation
+- **Core/FanRPMBounds.swift**: RPM and temperature limits shared by the UI and the write path
+- **Core/PermissionsManager.swift**: Installs the privileged helper and the sudoers rule
+- **Core/StatusBarManager.swift**: Menu bar icon and popover management
+- **Core/SettingsWindowController.swift**: AppKit window hosting the SwiftUI settings view
+- **Core/LaunchAtLoginManager.swift**: Login item registration (SMAppService for macOS 13+)
+- **Core/BatteryMonitor.swift**: Battery and power telemetry
+- **Core/MenuBarIconPreferences.swift**: Menu bar visibility and icon preferences
 - **FanControlViewModel.swift**: Main view model with Combine bindings
-- **PermissionsManager.swift**: SMC access checking and permission dialogs
-- **LaunchAtLoginManager.swift**: Login item registration (SMAppService for macOS 13+)
-- **StatusBarManager.swift**: Menu bar icon and popover management
-- **PopoverView.swift**: Main UI container
-- **TemperatureView.swift**: Temperature display component
-- **FanSpeedView.swift**: Fan speed display and slider
-- **ControlModeView.swift**: Mode selection and settings
+- **UI/Views/**: `PopoverView`, `SettingsView`, `TemperatureView`, `FanSpeedView`, `ContentView`
+- **UI/Dashboard/**: Widget dashboard — models, layout engine, store, grid
+- **UI/Modifiers/LiquidGlassModifier.swift**: macOS 26 Liquid Glass styling with a material fallback
+- **Resources/smc-helper**: The privileged helper binary (built from `tools/smc-helper`)
 
 ### SMC Keys Used
 
-**Temperature Sensors:**
-- `TC0P`, `TCXC`, `TC0E`, `TC0F`, `TC0D`, `TC1C-TC4C` - CPU temperatures
-- `TGDD`, `TG0P`, `TG0D`, `TG0E`, `TG0F` - GPU temperatures
-- `Tp09`, `Tp0T`, `Tp01`, `Tp05`, `Tp0D`, `Tp0b` - Apple Silicon temperatures
+**Temperature sensors** — probed in order, first readable value wins:
 
-**Fan Control:**
-- `F0Ac`, `F1Ac`, etc. - Actual fan speed
-- `F0Mn`, `F0Mx` - Min/Max fan speed
-- `F0Tg` - Target fan speed (for manual control)
-- `F0Md` - Fan mode (0=auto, 1=manual)
-- `FS! ` - Force bits for manual control
+- Intel: `TC0P`, `TCXC`, `TC0E`, `TC0F`, `TC0D`, `TC1C`–`TC4C` (CPU);
+  `TGDD`, `TG0P`, `TG0D`, `TG0E`, `TG0F` (GPU)
+- Apple Silicon: `Tp01`, `Tp05`, `Tp09`, `Tp0D`, `Tp0H`, `Tp0L`, `Tp0P`, `Tp0T`,
+  `Tp0X`, `Tp0b`…`Tp0z`, `Tp19`…`Tp1v`, `Te05`, `Te0L`, `Te0P`, `Te0S` (CPU/die);
+  `Tg05`, `Tg0D`, `Tg0L`, `Tg0T`, `Tg0V`, `Tg0f`, `Tg0j`, `Tg1f`, `Tg1j` (GPU)
+
+**Fan control:**
+
+- `F%dAc` — actual fan speed
+- `F%dMn`, `F%dMx` — hardware min/max; every write is clamped to `F%dMx`
+- `F%dTg` — target fan speed (written for manual control)
+- `F%dMd` / `F%dmd` — fan mode, 0 = auto, 1 = manual. Casing varies by silicon
+  (lowercase on M5)
+- `Ftst` — force-test key, written to 1 to suppress `thermalmonitord` while
+  taking manual control and back to 0 to release it. Absent on M5.
 
 ## Control Modes
 
 ### Manual Mode
-- Set a fixed fan speed using the slider
+- Set a fixed fan speed using the slider (unified, or per fan)
 - Speed is maintained regardless of temperature
 
 ### Automatic Mode
-- Fan speed adjusts based on temperature threshold
-- Below threshold: System manages fans
-- Above threshold: Linear interpolation to max speed
-- Critical (95°C+): Maximum fan speed
+
+The app keeps manual control of the fans and drives them along a curve — it does
+**not** hand them back to the system:
+
+- **At or below Threshold**: fans sit at the floor (`F%dMn`)
+- **Above Threshold**: linear ramp toward **Auto max speed**, reaching it at 90 °C
+- **Response** bends that curve: below 1.5 favours the floor, above 1.5 favours the ceiling
+- **88 °C and above**: an emergency override ignores **Auto max speed** and drives
+  every fan to its hardware maximum (`F%dMx`)
 
 ## Build Configuration
 
@@ -114,7 +129,21 @@ The project uses:
 
 ## License
 
-This project is provided as-is for educational purposes.
+SoloFan's own source — the Swift app, the UI, and the build tooling — is **MIT**;
+see [`LICENSE`](LICENSE).
+
+It ships one component under different terms:
+
+- **`smc-helper`** is built from `tools/smc-helper/smc.{c,h}`, which derives from
+  smcFanControl by devnull & Hendrik Holtmann and is **GPL**-licensed, as stated
+  in its file headers. It is compiled into a standalone executable that the app
+  runs as a subprocess (`sudo -n /usr/local/bin/smc-helper …`); it is not linked
+  into the Swift binary, and its sources live entirely in `tools/smc-helper/`.
+
+Built apps and DMGs therefore contain a GPL component, so redistributing them
+carries that component's obligations (source availability and license text among
+them). See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the details.
+The MIT license covers the rest and does permit commercial distribution.
 
 ## Troubleshooting
 

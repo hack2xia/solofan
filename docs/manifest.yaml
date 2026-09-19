@@ -5,7 +5,7 @@ version: "1.0"
 project:
   name: "ffan"
   description: "macOS Fan Control Application"
-  repository: "https://github.com/mohamadlounnas/ffan"
+  repository: "https://github.com/hack2xia/solofan"
 
 documentation:
   - file: "README.md"

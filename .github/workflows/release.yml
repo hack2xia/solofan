@@ -211,7 +211,7 @@ jobs:
 
           **Quick install:**
           \`\`\`bash
-          curl -fsSL https://raw.githubusercontent.com/mohamadlounnas/ffan/main/scripts/install.sh | bash
+          curl -fsSL https://raw.githubusercontent.com/hack2xia/solofan/main/scripts/install.sh | bash
           \`\`\`
 
           **Manual:**

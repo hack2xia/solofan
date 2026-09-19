@@ -1,10 +1,10 @@
 #!/bin/bash
 # SoloFan Quick Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/mohamadlounnas/ffan/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/hack2xia/solofan/main/scripts/install.sh | bash
 
 set -e
 
-REPO="mohamadlounnas/ffan"
+REPO="hack2xia/solofan"
 APP_NAME="SoloFan"
 
 echo "🌬️  SoloFan Installation"

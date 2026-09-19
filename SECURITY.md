@@ -9,7 +9,7 @@ Security fixes are applied to the latest SoloFan release line only.
 | 1.6.x   | Yes       |
 | < 1.6   | No        |
 
-Please upgrade to the latest release from [GitHub Releases](https://github.com/SoloTeamDev/solofan/releases) or [Gumroad](https://lounnas.gumroad.com/l/ffan).
+Please upgrade to the latest release from [GitHub Releases](https://github.com/hack2xia/solofan/releases) or [Gumroad](https://lounnas.gumroad.com/l/ffan).
 
 ## Reporting a Vulnerability
 
@@ -18,7 +18,7 @@ If you find a security issue in SoloFan (including the privileged SMC helper, in
 **Preferred:** use GitHub’s private vulnerability reporting on this repository:
 
 1. Open the repo on GitHub → **Security** → **Advisories** (or **Report a vulnerability**)
-2. Or go to: https://github.com/SoloTeamDev/solofan/security/advisories/new
+2. Or go to: https://github.com/hack2xia/solofan/security/advisories/new
 
 **Alternatively**, email: **mohamadlounnas@gmail.com** with:
 
@@ -71,4 +71,4 @@ write; deleting the helper disables fan control entirely.
 
 SoloFan requires elevated privileges to talk to the SMC for fan control. Reports related to privilege escalation, helper tool abuse, install-script tampering, or notarization / distribution integrity are especially welcome.
 
-For general bugs that are not security-sensitive, use [GitHub Issues](https://github.com/SoloTeamDev/solofan/issues).
+For general bugs that are not security-sensitive, use [GitHub Issues](https://github.com/hack2xia/solofan/issues).
