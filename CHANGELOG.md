@@ -2,15 +2,34 @@
 
 All notable changes to SoloFan will be documented in this file.
 
-## [Unreleased]
+## [1.6.7] - 2026-09-19
+
+### Added
+- **Unit tests and CI**: the repo had no test target — `fanTests/` was orphaned on disk and could not compile. Added the target, a shared scheme, and a workflow running `xcodebuild test` on every PR and push to `main`. The host app is kept inert under XCTest so a test run cannot touch the fans or prompt for admin rights.
+- **88 °C emergency override**: at or above 88 °C, automatic mode ignores Max Speed and drives every fan to its hardware maximum (`F%dMx`).
+- `THIRD_PARTY_NOTICES.md`, and a **Privileged Helper** section in `SECURITY.md` documenting the sudoers trust assumption.
 
 ### Fixed
+- **Crash or `kill -9` could leave thermalmonitord suppressed**: taking manual control may set the `Ftst` force-test key, and only `smc-helper auto` clears it, so a run that died without restoring left it set. Fans are now handed back to the system once at launch, on the same serial queue as the settings apply so it always runs first.
+- **Quit raced the restore**: `quitApplication` fired the restore asynchronously and terminated 0.5 s later, and the `deinit` copy was dead code (its block captures `self` weakly). Restoring is now synchronous and bounded by a timeout, driven from `applicationShouldTerminate` so every termination path waits. Sleep does the same with a 1 s timeout.
+- **Install scripts produced a helper the app could not invoke**: both used `chmod 4755` and wrote no sudoers rule, while the app installs mode 755 plus `/etc/sudoers.d/smc-fan-helper` and always shells out through `sudo -n`. Setuid bought nothing, so every fan write fell back to an AppleScript password prompt. Both scripts now match the app and validate the drop-in with `visudo -cf`.
+- **Test runs overwrote the app's own settings**: they wrote through `UserDefaults.standard` in the app's domain, leaving SoloFan in manual mode at the floor RPM. `FanController` now takes an injectable `UserDefaults`.
 - **Auto-mode Threshold now actually controls the fan**: `autoThreshold` was persisted and shown in the UI but never used by the control loop. The curve now sits at the floor speed at or below the Threshold and ramps linearly toward Max Speed at 90 °C.
+- **Intel Macs**: `smc-helper` is rebuilt as a universal binary.
+- **High-temperature alerts** moved off the deprecated `NSUserNotification` to `UNUserNotificationCenter`.
 
 ### Changed
 - **Minimum macOS lowered from 26.1 to 13.0 (Ventura)**: `MACOSX_DEPLOYMENT_TARGET` is now `13.0`.
+- **Menu bar popover** opens instantly: it rebuilds a lightweight shell immediately and embeds the dashboard on the next run loop turn, caching the controller between opens.
 - Native **Liquid Glass** styling and `MeshGradient` are gated to macOS 26 / 15+ at runtime; macOS 13–15 use equivalent material-based fallbacks (`.ultraThinMaterial` surfaces, bordered buttons, animated gradient backdrop).
 - Two-parameter `.onChange` closures replaced with the single-parameter form available since macOS 12.
+- Repository URLs in the docs and scripts now point at `hack2xia/solofan`.
+- README rewritten against the current code — the file list, the SMC key table, and both control-mode descriptions were stale (it claimed the system manages the fans below the threshold, and advertised a 95 °C critical point).
+- Bumped app version to **1.6.7** (`MARKETING_VERSION`) and build number to **11**.
+
+### Removed
+- **`smc-write`**: Developer ID signed, notarized and shipped in every release, but nothing in the app ever called it. Removed the binary, its stub and the `tools/smc-write` package.
+- `SystemMonitor.writeSMCKey` and `readTemperatureUsingPowermetrics` — no callers.
 
 ## [1.6.6] - 2026-07-16
 

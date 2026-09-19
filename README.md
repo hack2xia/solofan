@@ -7,7 +7,7 @@ A lightweight menu bar app for monitoring CPU/GPU temperatures and controlling f
 
 ## Download
 
-[**Download Latest Version (v1.6.6)**](https://github.com/hack2xia/solofan/releases/latest)
+[**Download Latest Version**](https://github.com/hack2xia/solofan/releases/latest)
 
 **Quick Start:**
 1. Download the DMG from the link above

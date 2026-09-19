@@ -1,16 +1,16 @@
-# ffan Documentation Manifest
+# SoloFan Documentation Manifest
 # This file catalogs all documentation files in the project
 
 version: "1.0"
 project:
-  name: "ffan"
+  name: "SoloFan"
   description: "macOS Fan Control Application"
   repository: "https://github.com/hack2xia/solofan"
 
 documentation:
   - file: "README.md"
     title: "Main Documentation"
-    description: "Comprehensive project overview, installation guide, usage instructions, architecture details, and contribution guidelines for the ffan macOS fan control application"
+    description: "Comprehensive project overview, installation guide, usage instructions, architecture details, and contribution guidelines for the SoloFan macOS fan control application"
     category: "general"
     audience: ["end-users", "developers", "contributors"]
     sections:
@@ -48,12 +48,12 @@ planned:
     
   - file: "troubleshooting.md"
     title: "Troubleshooting Guide"
-    description: "Common issues, error messages, and solutions for ffan installation and operation"
+    description: "Common issues, error messages, and solutions for SoloFan installation and operation"
     status: "planned"
     
   - file: "api-docs.md"
     title: "API Documentation"
-    description: "Internal API documentation for developers extending or modifying ffan"
+    description: "Internal API documentation for developers extending or modifying SoloFan"
     status: "planned"
 
 categories:

@@ -39,17 +39,32 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      # Developer ID signing needs secrets that a fork may not have configured.
+      # Detect them up front so a tag still produces a runnable artifact: an
+      # unsigned bundle will not launch at all on Apple Silicon, so the fallback
+      # is ad-hoc signing rather than no signing.
+      - name: Check signing secrets
+        id: signing
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          if [[ -n "${BUILD_CERTIFICATE_BASE64:-}" && -n "${P12_PASSWORD:-}" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "Developer ID signing + notarization enabled"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No Developer ID secrets configured — producing an ad-hoc signed, non-notarized release."
+          fi
+
       - name: Import Developer ID certificate
+        if: steps.signing.outputs.available == 'true'
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           set -euo pipefail
-          if [[ -z "${BUILD_CERTIFICATE_BASE64:-}" || -z "${P12_PASSWORD:-}" ]]; then
-            echo "Missing BUILD_CERTIFICATE_BASE64 or P12_PASSWORD secrets"
-            exit 1
-          fi
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           KEYCHAIN_PASSWORD="${KEYCHAIN_PASSWORD:-$(openssl rand -base64 24)}"
@@ -87,6 +102,7 @@ jobs:
           cp -R "$BUILT_APP" release/SoloFan.app
 
       - name: Sign application (Developer ID)
+        if: steps.signing.outputs.available == 'true'
         run: |
           set -euo pipefail
           chmod +x release/SoloFan.app/Contents/MacOS/*
@@ -101,7 +117,24 @@ jobs:
           codesign --force --deep --options runtime --timestamp --sign "$CODESIGN_IDENTITY" release/SoloFan.app
           codesign --verify --deep --strict --verbose=2 release/SoloFan.app
 
+      - name: Ad-hoc sign application
+        if: steps.signing.outputs.available != 'true'
+        run: |
+          set -euo pipefail
+          chmod +x release/SoloFan.app/Contents/MacOS/*
+
+          # Nested helpers first (inside-out), same shape as the Developer ID path.
+          for bin in release/SoloFan.app/Contents/Resources/smc-helper; do
+            if [ -f "$bin" ]; then
+              codesign --force --sign - "$bin"
+            fi
+          done
+
+          codesign --force --deep --sign - release/SoloFan.app
+          codesign --verify --deep --strict --verbose=2 release/SoloFan.app
+
       - name: Notarize application
+        if: steps.signing.outputs.available == 'true'
         env:
           APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -180,6 +213,7 @@ jobs:
           rm -f temp_solofan.dmg
 
       - name: Sign and notarize DMG
+        if: steps.signing.outputs.available == 'true'
         env:
           APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -195,15 +229,29 @@ jobs:
             --issuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --wait
           xcrun stapler staple "$DMG"
+
+      # Separate from signing so the checksum exists on unsigned runs too — the
+      # release notes read it unconditionally.
+      - name: Checksum DMG
+        run: |
+          set -euo pipefail
+          DMG="solofan-v${{ steps.version.outputs.version }}-macos.dmg"
           shasum -a 256 "$DMG" > "${DMG}.sha256"
 
       - name: Generate release notes
         run: |
+          if [ "${{ steps.signing.outputs.available }}" = "true" ]; then
+            SIGNING_LINE='- **Developer ID signed + notarized** — App, nested `smc-helper`, and DMG; notarized and stapled for Gatekeeper'
+            INSTALL_STEP='2. Drag **SoloFan.app** to /Applications/'
+          else
+            SIGNING_LINE='- **Unsigned build** — CI has no Developer ID certificate for this repo, so the app is ad-hoc signed and **not notarized**. macOS will refuse it on first launch; right-click **SoloFan.app** → **Open**, or run `xattr -dr com.apple.quarantine /Applications/SoloFan.app`.'
+            INSTALL_STEP='2. Drag **SoloFan.app** to /Applications/, then right-click → **Open** the first time'
+          fi
           cat > release_notes.md << EOF
           ## SoloFan v${{ steps.version.outputs.version }}
 
           ### Highlights
-          - **Developer ID signed + notarized** — App, nested \`smc-helper\`, and DMG; notarized and stapled for Gatekeeper
+          $SIGNING_LINE
           - **Menu bar popover fix** — Left-click opens the dashboard again (lazy content on open)
           - Includes Apple Silicon fan control and die-temp fixes from v1.6.4+
 
@@ -216,7 +264,7 @@ jobs:
 
           **Manual:**
           1. Download \`solofan-v${{ steps.version.outputs.version }}-macos.dmg\` or ZIP
-          2. Drag **SoloFan.app** to /Applications/
+          $INSTALL_STEP
           3. Install the helper when prompted
 
           ### Requirements
