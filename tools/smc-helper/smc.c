@@ -9,9 +9,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <limits.h>
 #include <unistd.h>
 #include <IOKit/IOKitLib.h>
 #include "smc.h"
+
+// Last-resort RPM floor when F{n}Mn cannot be read. Matches the app-side
+// FanRPMBounds.absoluteWriteMinRPM: a rogue caller asking for 0 RPM must not
+// be able to stall the fan just because the min key read failed.
+#define SMC_ABS_MIN_RPM 500
 
 static io_connect_t g_conn = 0;
 
@@ -223,7 +230,19 @@ kern_return_t SMCWriteKey(SMCVal_t writeVal, io_connect_t conn)
         fprintf(stderr, "Error: SMCCall write failed: %08x\n", result);
         return result;
     }
-    
+
+    // The SMC firmware reports its own verdict in `result` even when the IOKit
+    // transport succeeds — a firmware-rejected write still returns
+    // kIOReturnSuccess from IOConnectCallStructMethod. writeFanModeRaw() below
+    // relies on exactly this byte for the 0x82 SYSTEM-mode rejection; the
+    // generic path must not silently swallow it.
+    if (outputStructure.result != 0)
+    {
+        fprintf(stderr, "Error: SMC firmware rejected write for %s: %02x\n",
+                writeVal.key, (unsigned)outputStructure.result);
+        return kIOReturnError;
+    }
+
     return kIOReturnSuccess;
 }
 
@@ -338,7 +357,10 @@ static void writeFtst(int value, io_connect_t conn)
     in.data8 = SMC_CMD_WRITE_BYTES;
     in.keyInfo.dataSize = ki.dataSize;
     in.bytes[0] = (UInt8)value;
-    SMCCall(KERNEL_INDEX_SMC, &in, &out, conn);
+    kern_return_t kr = SMCCall(KERNEL_INDEX_SMC, &in, &out, conn);
+    if (kr != kIOReturnSuccess || out.result != 0)
+        fprintf(stderr, "Error: Ftst write failed (transport %08x, firmware %02x)\n",
+                kr, (unsigned)out.result);
 }
 
 // Write the fan mode key and return the SMC firmware result byte:
@@ -426,8 +448,12 @@ kern_return_t setFanMode(int fanNum, int mode, io_connect_t conn)
     kern_return_t result = SMCReadKey(key, &val, conn);
     if (result != kIOReturnSuccess)
     {
-        // mode key might not exist on some systems
-        return kIOReturnSuccess; // Not an error, just skip
+        // Mode key unreadable. fanModeTemplate() has already probed F%dMd vs
+        // F%dmd at startup, so both casings being absent means this machine
+        // never accepted manual mode in the first place (`set` would fail in
+        // unlockFanManual too). Report the failure honestly instead of
+        // pretending the restore worked.
+        return result;
     }
 
     if (val.dataSize == 1)
@@ -440,18 +466,27 @@ kern_return_t setFanMode(int fanNum, int mode, io_connect_t conn)
     return result;
 }
 
+kern_return_t setFanAuto(int fanNum, io_connect_t conn);
+
 kern_return_t setFanSpeed(int fanNum, int speed, io_connect_t conn)
 {
     SMCVal_t val;
     char key[8];
 
     // Clamp to the fan's own reported envelope so a bad caller can't push a
-    // nonsense target through the root helper. F{n}Mx is the hardware ceiling.
-    if (speed < 0)
-        speed = 0;
+    // nonsense target through the root helper. This binary must not trust its
+    // caller: the app clamps too, but any admin process can invoke it
+    // directly via the NOPASSWD sudoers rule. Order: max first, then min — if
+    // firmware ever reports fmin > fmax, min wins; overspeeding slightly is
+    // far safer than a stalled fan.
+    if (speed < SMC_ABS_MIN_RPM)
+        speed = SMC_ABS_MIN_RPM;
     float fmax = getFanMaxSpeed(fanNum, conn);
     if (fmax > 0 && speed > (int)fmax)
         speed = (int)fmax;
+    float fmin = getFanMinSpeed(fanNum, conn);
+    if (fmin > 0 && speed < (int)fmin)
+        speed = (int)fmin;
 
     // Take manual control. Direct mode=1 works from AUTO; if the firmware holds
     // SYSTEM mode (0x82) it falls back to the Ftst force-test unlock.
@@ -468,9 +503,10 @@ kern_return_t setFanSpeed(int fanNum, int speed, io_connect_t conn)
     if (result != kIOReturnSuccess)
     {
         fprintf(stderr, "Error: Cannot read %s\n", key);
+        setFanAuto(fanNum, conn); // best-effort rollback of the unlock below
         return result;
     }
-    
+
     // Encode based on data type
     if (strcmp(val.dataType, DATATYPE_FLT) == 0 && val.dataSize == 4)
     {
@@ -488,12 +524,21 @@ kern_return_t setFanSpeed(int fanNum, int speed, io_connect_t conn)
     else
     {
         fprintf(stderr, "Error: Unknown type %s for %s\n", val.dataType, key);
+        setFanAuto(fanNum, conn); // best-effort rollback of the unlock below
         return kIOReturnError;
     }
-    
+
     sprintf(val.key, "%s", key);
-    
+
     result = SMCWriteKey(val, conn);
+    if (result != kIOReturnSuccess)
+    {
+        // Roll back: unlockFanManual may have set Ftst=1, which keeps
+        // thermalmonitord suppressed until something writes Ftst=0. Leaving
+        // "manual mode + Ftst=1" behind is the worst legacy state this tool
+        // can leave, so hand the fan back before failing out.
+        setFanAuto(fanNum, conn);
+    }
     return result;
 }
 
@@ -544,6 +589,19 @@ void printFanInfo(io_connect_t conn)
     }
 }
 
+// Strict integer parsing: atoi() silently maps garbage to 0, which a root
+// helper must not accept ("set 0 abc" must fail loudly, not mean 0 RPM).
+static int parseIntArg(const char *str, int *out)
+{
+    char *end = NULL;
+    errno = 0;
+    long v = strtol(str, &end, 10);
+    if (end == str || *end != '\0' || errno != 0 || v < INT_MIN || v > INT_MAX)
+        return 0;
+    *out = (int)v;
+    return 1;
+}
+
 void usage(const char *prog)
 {
     printf("SMC Fan Control Helper\n");
@@ -589,8 +647,14 @@ int main(int argc, char *argv[])
             SMCClose(g_conn);
             return 1;
         }
-        int fanNum = atoi(argv[2]);
-        int speed = atoi(argv[3]);
+        int fanNum, speed;
+        if (!parseIntArg(argv[2], &fanNum) || !parseIntArg(argv[3], &speed))
+        {
+            fprintf(stderr, "Error: fan number and speed must be integers\n");
+            fprintf(stderr, "Usage: %s set <FAN#> <RPM>\n", argv[0]);
+            SMCClose(g_conn);
+            return 1;
+        }
 
         if (!validFan(fanNum, g_conn))
         {
@@ -633,7 +697,14 @@ int main(int argc, char *argv[])
             SMCClose(g_conn);
             return 1;
         }
-        int fanNum = atoi(argv[2]);
+        int fanNum;
+        if (!parseIntArg(argv[2], &fanNum))
+        {
+            fprintf(stderr, "Error: fan number must be an integer\n");
+            fprintf(stderr, "Usage: %s auto <FAN#>\n", argv[0]);
+            SMCClose(g_conn);
+            return 1;
+        }
 
         if (!validFan(fanNum, g_conn))
         {
