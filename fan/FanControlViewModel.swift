@@ -349,6 +349,12 @@ class FanControlViewModel: ObservableObject {
     func resetToSystemControl() {
         fanController.resetToSystemControl()
     }
+
+    /// Blocks until the fans are back under system control; used by the quit
+    /// path so the process cannot exit mid-restore.
+    func restoreSystemControlSynchronously() {
+        fanController.restoreAutomaticControlSync()
+    }
     
     func setAutoThreshold(_ threshold: Double) {
         fanController.setAutoThreshold(threshold)

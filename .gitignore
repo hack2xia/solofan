@@ -1,3 +1,6 @@
 /build/
 tools/smc-write/.build/
 tools/.build/
+
+.DS_Store
+/report.md

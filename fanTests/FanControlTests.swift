@@ -8,7 +8,29 @@
 import XCTest
 @testable import SoloFan
 
+@MainActor
 final class FanControlTests: XCTestCase {
+    
+    private var defaults: UserDefaults!
+    private let suiteName = "FanControlTests"
+    
+    override func setUp() {
+        super.setUp()
+        defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+    
+    override func tearDown() {
+        defaults.removePersistentDomain(forName: suiteName)
+        super.tearDown()
+    }
+    
+    /// A controller backed by the scratch suite. Without this the tests write
+    /// through `UserDefaults.standard` in the app's own domain, leaving the
+    /// user's SoloFan stuck in manual mode at the floor RPM after a test run.
+    private func makeController() -> FanController {
+        FanController(systemMonitor: SystemMonitor(), defaults: defaults)
+    }
     
     func testControlModeEnum() {
         XCTAssertEqual(ControlMode.manual, ControlMode.manual)
@@ -17,17 +39,19 @@ final class FanControlTests: XCTestCase {
     }
     
     func testFanControllerInitialization() {
-        let monitor = SystemMonitor()
-        let controller = FanController(systemMonitor: monitor)
-        
-        XCTAssertEqual(controller.mode, .manual)
+        let controller = makeController()
+
+        // `mode` is restored from the user's persisted settings, so it is not an
+        // invariant of `init` — only the speed clamps are.
         XCTAssertGreaterThanOrEqual(controller.manualSpeed, FanRPMBounds.absoluteWriteMinRPM)
         XCTAssertLessThanOrEqual(controller.manualSpeed, FanRPMBounds.absoluteWriteMaxRPM)
     }
     
     func testFanControllerManualSpeed() {
-        let monitor = SystemMonitor()
-        let controller = FanController(systemMonitor: monitor)
+        let controller = makeController()
+        // Speed edits only take effect in manual mode, and the mode is restored
+        // from persisted settings.
+        controller.setMode(.manual)
         
         controller.setManualSpeed(3000)
         XCTAssertEqual(controller.manualSpeed, 3000)
@@ -41,10 +65,7 @@ final class FanControlTests: XCTestCase {
     }
     
     func testFanControllerModeSwitch() {
-        let monitor = SystemMonitor()
-        let controller = FanController(systemMonitor: monitor)
-        
-        XCTAssertEqual(controller.mode, .manual)
+        let controller = makeController()
         
         controller.setMode(.automatic)
         XCTAssertEqual(controller.mode, .automatic)
@@ -53,34 +74,10 @@ final class FanControlTests: XCTestCase {
         XCTAssertEqual(controller.mode, .manual)
     }
     
-    func testUserDefaultsManager() {
-        let manager = UserDefaultsManager.shared
-        
-        // Test control mode
-        manager.controlMode = .automatic
-        XCTAssertEqual(manager.controlMode, .automatic)
-        
-        manager.controlMode = .manual
-        XCTAssertEqual(manager.controlMode, .manual)
-        
-        // Test manual speed
-        manager.manualFanSpeed = 2500
-        XCTAssertEqual(manager.manualFanSpeed, 2500)
-        
-        // Test auto threshold
-        manager.autoThreshold = 65.0
-        XCTAssertEqual(manager.autoThreshold, 65.0)
-        
-        // Test auto max speed
-        manager.autoMaxSpeed = 5000
-        XCTAssertEqual(manager.autoMaxSpeed, 5000)
-    }
-    
     func testFanControlViewModelInitialization() {
         let viewModel = FanControlViewModel()
         
         XCTAssertNotNil(viewModel)
-        XCTAssertEqual(viewModel.controlMode, .manual)
         XCTAssertEqual(viewModel.fanSpeeds.count, 0)
     }
     
@@ -103,10 +100,14 @@ final class FanControlTests: XCTestCase {
         let color3 = viewModel.getTemperatureColor()
         XCTAssertEqual(color3, .yellow)
         
-        // Test hot temperature
+        // Test hot temperature (70–85°C band is orange; red starts at 85°C)
         viewModel.cpuTemperature = 75.0
         let color4 = viewModel.getTemperatureColor()
-        XCTAssertEqual(color4, .red)
+        XCTAssertEqual(color4, .orange)
+        
+        viewModel.cpuTemperature = 90.0
+        let color5 = viewModel.getTemperatureColor()
+        XCTAssertEqual(color5, .red)
     }
     
     func testMaxTemperatureCalculation() {

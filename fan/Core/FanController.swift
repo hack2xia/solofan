@@ -33,6 +33,9 @@ class FanController: ObservableObject {
     @Published var lastAppliedSpeed: Int = 0
 
     private weak var systemMonitor: SystemMonitor?
+    /// Where the user's fan preferences live. Injectable so tests can run
+    /// against a scratch suite instead of overwriting the real app's settings.
+    private let defaults: UserDefaults
     private var autoControlTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
@@ -44,8 +47,9 @@ class FanController: ObservableObject {
         "/usr/local/bin/smc-helper"
     }
 
-    init(systemMonitor: SystemMonitor) {
+    init(systemMonitor: SystemMonitor, defaults: UserDefaults = .standard) {
         self.systemMonitor = systemMonitor
+        self.defaults = defaults
         loadSettings()
 
         systemMonitor.$fanMaxSpeeds
@@ -70,7 +74,12 @@ class FanController: ObservableObject {
 
     deinit {
         stopAutoControl()
-        restoreAutomaticControl()
+        // Restoring system control here was dead code: `restoreAutomaticControl`
+        // hops onto `applyQueue` and captures `self` weakly, so by the time the
+        // block runs the object is gone and its guard returns immediately.
+        // Restoring now happens on the quit path
+        // (`restoreAutomaticControlSync`) and once at launch
+        // (`releaseFansToSystem`).
     }
 
     // MARK: - Hardware-derived clamps
@@ -151,6 +160,15 @@ class FanController: ObservableObject {
 
     private func applyInitialSettings() {
         print("FanController: Applying initial settings - mode: \(mode)")
+
+        // A previous run may have died without handing the fans back (crash,
+        // `kill -9`, power loss), leaving F{n}Md=1 and — worse — Ftst=1, which
+        // keeps thermalmonitord suppressed until something writes Ftst=0. Only
+        // `smc-helper auto` clears it (see unlockFanManual/setFanAuto in smc.c),
+        // so always release the fans once at launch before applying settings.
+        // Enqueued on the same serial queue as the apply below, so it runs first.
+        releaseFansToSystem()
+
         switch mode {
         case .manual:
             enableManualMode()
@@ -290,6 +308,57 @@ class FanController: ObservableObject {
         }
     }
 
+    /// Quit-path variant of `restoreAutomaticControl`: blocks (bounded by
+    /// `timeout`) until every fan is back under system control, so `terminate`
+    /// cannot race the restore the way fire-and-forget + a 0.5s wait did.
+    ///
+    /// The AppleScript fallback is disabled — prompting for a password on the way
+    /// out is useless, and anything left behind is cleared by
+    /// `releaseFansToSystem()` on the next launch.
+    @discardableResult
+    func restoreAutomaticControlSync(timeout: TimeInterval = 2.0) -> Bool {
+        stopAutoControl()
+
+        guard let monitor = systemMonitor, monitor.numberOfFans > 0 else { return false }
+        let n = monitor.numberOfFans
+        let deadline = Date().addingTimeInterval(timeout)
+
+        var allSuccess = true
+        for i in 0..<n {
+            if Date() >= deadline {
+                print("Fan Control: restore timed out after \(timeout)s")
+                allSuccess = false
+                break
+            }
+            if !runSmcHelper(args: ["auto", "\(i)"], allowAppleScriptFallback: false) {
+                allSuccess = false
+            }
+        }
+
+        if allSuccess {
+            isControlEnabled = false
+            statusMessage = "Automatic mode restored"
+            print("Fan Control: Automatic mode restored (synchronous)")
+        } else {
+            print("Fan Control: Failed to restore auto mode on quit")
+        }
+        return allSuccess
+    }
+
+    /// Hands every fan back to the system (`F{n}Md=0`, and `Ftst=0` via
+    /// `smc-helper auto`) without touching published state or user settings.
+    /// Used at launch to clear whatever a previous run left behind.
+    private func releaseFansToSystem() {
+        guard let monitor = systemMonitor, monitor.numberOfFans > 0 else { return }
+        let n = monitor.numberOfFans
+        applyQueue.async { [weak self] in
+            guard let self = self else { return }
+            for i in 0..<n {
+                _ = self.runSmcHelper(args: ["auto", "\(i)"])
+            }
+        }
+    }
+
     private func applyManualTargets() {
         guard let monitor = systemMonitor else {
             statusMessage = "No system monitor"
@@ -355,7 +424,10 @@ class FanController: ObservableObject {
         }
     }
 
-    private func runSmcHelper(args: [String]) -> Bool {
+    /// Runs the privileged helper. `allowAppleScriptFallback` is false on the
+    /// quit path: an admin prompt there is pointless (the process is exiting)
+    /// and the next launch clears whatever is left behind anyway.
+    private func runSmcHelper(args: [String], allowAppleScriptFallback: Bool = true) -> Bool {
         let helperPath = smcHelperPath
 
         // Runs on a background queue — do not touch @Published here. Callers map
@@ -396,6 +468,11 @@ class FanController: ObservableObject {
             print("Fan Control: sudo -n execution error: \(error)")
         }
 
+        guard allowAppleScriptFallback else {
+            print("Fan Control: sudo -n unauthorized; AppleScript fallback disabled for this call.")
+            return false
+        }
+
         print("Fan Control: sudo -n unauthorized. Falling back to AppleScript.")
         let argsString = args.joined(separator: " ")
         let fullCommand = "'\(helperPath)' \(argsString)"
@@ -403,8 +480,6 @@ class FanController: ObservableObject {
 
         // NSAppleScript drives Apple Events and must run on the main thread; this
         // path is normally reached from applyQueue (off-main), so hop to main.
-        // restoreAutomaticControlSync() calls us already on main at quit — run
-        // inline there, since main.sync onto itself would deadlock.
         let runScript: () -> Bool = {
             var error: NSDictionary?
             guard let scriptObject = NSAppleScript(source: scriptSource) else { return false }
@@ -515,8 +590,6 @@ class FanController: ObservableObject {
     }
 
     private func loadSettings() {
-        let defaults = UserDefaults.standard
-
         if let savedMode = defaults.string(forKey: "fanControlMode") {
             mode = ControlMode(rawValue: savedMode) ?? .manual
         }
@@ -555,7 +628,6 @@ class FanController: ObservableObject {
     }
 
     private func saveSettings() {
-        let defaults = UserDefaults.standard
         defaults.set(mode.rawValue, forKey: "fanControlMode")
         defaults.set(perFanManualControl, forKey: "perFanManualControl")
         defaults.set(manualSpeed, forKey: "manualFanSpeed")

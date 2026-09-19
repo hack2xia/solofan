@@ -6,6 +6,7 @@
 import XCTest
 @testable import SoloFan
 
+@MainActor
 final class DashboardStoreTests: XCTestCase {
 
     private var defaults: UserDefaults!
@@ -58,7 +59,16 @@ final class DashboardStoreTests: XCTestCase {
     }
 
     func testAddAndRemoveWidget() {
-        defaults.removeObject(forKey: "dashboardLayout")
+        // Seed a known layout: `defaultLayout` depends on whether the machine
+        // reports a battery, so starting from it makes this test machine-specific.
+        let seed = DashboardLayout(rows: [
+            DashboardRow(columns: 2, widgets: [DashboardWidget(kind: .cpuTemperature)])
+        ])
+        guard let seedData = try? JSONEncoder().encode(seed) else {
+            XCTFail("Failed to encode seed layout")
+            return
+        }
+        defaults.set(seedData, forKey: "dashboardLayout")
         let store = DashboardStore(defaults: defaults)
 
         store.addRow(columns: 2)

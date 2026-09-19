@@ -22,8 +22,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
         NSApp.setActivationPolicy(.accessory)
+
+        // The unit-test bundle is injected into this process, so XCTest launches
+        // the real app as its host. Skip the menu-bar / SMC startup then: the
+        // tests must never spawn the privileged helper, touch the fans, or pop
+        // an admin prompt on the machine running them.
+        guard !Self.isRunningTests else { return }
+
         installSettingsKeyboardShortcut()
         setupApplication()
+    }
+
+    private static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
     }
 
     private func installSettingsKeyboardShortcut() {
@@ -133,10 +145,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func quitApplication() {
-        viewModel?.resetToSystemControl()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            NSApplication.shared.terminate(nil)
-        }
+        NSApplication.shared.terminate(nil)
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Hand the fans back before the process goes away, and wait for it.
+        // `quitApplication` used to fire this off asynchronously and terminate
+        // 0.5s later, which could lose the race and leave F{n}Md=1 / Ftst=1 set
+        // (thermalmonitord stays suppressed until something writes Ftst=0).
+        viewModel?.restoreSystemControlSynchronously()
+        return .terminateNow
     }
 
     private func initializeMonitoring() {

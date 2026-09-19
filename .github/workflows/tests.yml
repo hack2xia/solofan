@@ -1,0 +1,37 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run unit tests
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # The tests are hosted by SoloFan.app, which skips its menu bar / SMC
+      # startup under XCTest — no helper is spawned and no fans are touched.
+      - name: Run tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project fan.xcodeproj \
+            -scheme fan \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO

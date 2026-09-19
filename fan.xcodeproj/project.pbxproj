@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		D127C6FA2F15000100456D59 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = D127C6DA2F14343F00456D59 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D127C6E12F14343F00456D59;
+			remoteInfo = fan;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		D127C6E22F14343F00456D59 /* fan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = fan.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D127C6F52F15000100456D59 /* fanTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = fanTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = fan;
 			sourceTree = "<group>";
 		};
+		D127C6F02F15000100456D59 /* fanTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = fanTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		D127C6DF2F14343F00456D59 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D127C6F32F15000100456D59 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -41,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				D127C6E22F14343F00456D59 /* fan.app */,
+				D127C6F52F15000100456D59 /* fanTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +94,29 @@
 			productReference = D127C6E22F14343F00456D59 /* fan.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D127C6F12F15000100456D59 /* fanTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D127C6F62F15000100456D59 /* Build configuration list for PBXNativeTarget "fanTests" */;
+			buildPhases = (
+				D127C6F22F15000100456D59 /* Sources */,
+				D127C6F32F15000100456D59 /* Frameworks */,
+				D127C6F42F15000100456D59 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D127C6F92F15000100456D59 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D127C6F02F15000100456D59 /* fanTests */,
+			);
+			name = fanTests;
+			packageProductDependencies = (
+			);
+			productName = fanTests;
+			productReference = D127C6F52F15000100456D59 /* fanTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +129,10 @@
 				TargetAttributes = {
 					D127C6E12F14343F00456D59 = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					D127C6F12F15000100456D59 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = D127C6E12F14343F00456D59;
 					};
 				};
 			};
@@ -100,12 +151,20 @@
 			projectRoot = "";
 			targets = (
 				D127C6E12F14343F00456D59 /* fan */,
+				D127C6F12F15000100456D59 /* fanTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		D127C6E02F14343F00456D59 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D127C6F42F15000100456D59 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +181,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D127C6F22F15000100456D59 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D127C6F92F15000100456D59 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D127C6E12F14343F00456D59 /* fan */;
+			targetProxy = D127C6FA2F15000100456D59 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		D127C6EB2F14344200456D59 /* Debug */ = {
@@ -327,6 +401,42 @@
 			};
 			name = Release;
 		};
+		D127C6F72F15000100456D59 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = 97L93HH6B4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.6.6;
+				PRODUCT_BUNDLE_IDENTIFIER = tests.fan.fanTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SoloFan.app/Contents/MacOS/SoloFan";
+			};
+			name = Debug;
+		};
+		D127C6F82F15000100456D59 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
+				DEVELOPMENT_TEAM = 97L93HH6B4;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.6.6;
+				PRODUCT_BUNDLE_IDENTIFIER = tests.fan.fanTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SoloFan.app/Contents/MacOS/SoloFan";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -344,6 +454,15 @@
 			buildConfigurations = (
 				D127C6EE2F14344200456D59 /* Debug */,
 				D127C6EF2F14344200456D59 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D127C6F62F15000100456D59 /* Build configuration list for PBXNativeTarget "fanTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D127C6F72F15000100456D59 /* Debug */,
+				D127C6F82F15000100456D59 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

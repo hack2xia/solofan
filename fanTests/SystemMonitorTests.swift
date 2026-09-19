@@ -8,6 +8,7 @@
 import XCTest
 @testable import SoloFan
 
+@MainActor
 final class SystemMonitorTests: XCTestCase {
     
     func testSystemMonitorInitialization() {
@@ -49,7 +50,7 @@ final class SystemMonitorTests: XCTestCase {
     }
     
     func testFanReadingStructure() {
-        let reading = FanReading(speed: 2500, minSpeed: 1000, maxSpeed: 6000)
+        let reading = FanReading(id: 0, speed: 2500, minSpeed: 1000, maxSpeed: 6000)
         
         XCTAssertEqual(reading.speed, 2500)
         XCTAssertEqual(reading.minSpeed, 1000)
